@@ -1,0 +1,7 @@
+.env
+*.key
+.venv
+node_modules
+__pycache__
+*.py[cod]
+evals/actual.json
