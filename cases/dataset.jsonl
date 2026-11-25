@@ -1,0 +1,8 @@
+{"id": "watering", "idea": "a page that tracks plant watering", "notes": "Vague on purpose: no mention of users, scale, or what happens when two people water the same plant."}
+{"id": "invoice", "idea": "tool that reminds freelancers to chase unpaid invoices", "notes": "Implies time, state and outbound contact. All three need pinning down."}
+{"id": "study", "idea": "app for students to revise with flashcards", "notes": "Crowded space. Taste shows in what you refuse to build."}
+{"id": "market", "idea": "site where neighbours can lend each other tools", "notes": "Two-sided. Trust and damage are the real problem, not the listing."}
+{"id": "menu", "idea": "generate a weekly meal plan from what's in my fridge", "notes": "Input is messy real-world data. Needs an honest fallback path."}
+{"id": "shifts", "idea": "rota maker for a small cafe", "notes": "Constraints are the product: labour cost, opening hours, one person who hates Tuesdays."}
+{"id": "pledge", "idea": "countdown page for a charity fundraiser with a progress bar", "notes": "Simple surface, but the number has to be trustworthy or the page is worthless."}
+{"id": "scrapbook", "idea": "save and organise recipes from anywhere on the web", "notes": "Ingestion is the hard part. Everything downstream is a CRUD you have seen before."}
