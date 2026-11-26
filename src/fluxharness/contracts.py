@@ -1,108 +1,87 @@
-"""Typed handoff contracts between sub-agents.
+"""Typed handoff records between sub-agents.
 
-A stage emits one of these; the next stage only ever receives a validated one.
-If a model returns something malformed, the failure names the stage and the
-field rather than surfacing three stages downstream as a confusing eval failure.
+A sub-agent that produces garbage must fail *at its own stage*, named — not
+three stages downstream when someone finally reads the garbage in an eval.
+These records are the contract: validated on the way out of one stage and on
+the way into the next, with errors that name the stage and the offending field.
+
+Tradeoff: a little ceremony per field, in exchange for failures you can read
+like a sentence.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 
-class ContractError(ValueError):
-    """A stage produced something that is not a valid record."""
+class ContractError(Exception):
+    """Validation failure on a stage handoff.
+
+    The message always names the stage and the offending field(s):
+    `[architect] entities needs at least 2, got 1`.
+    """
 
     def __init__(self, stage: str, problems: list[str]):
         self.stage = stage
-        self.problems = problems
-        super().__init__(f"[{stage}] " + "; ".join(problems))
+        self.problems = list(problems)
+        super().__init__(f"[{stage}] " + "; ".join(self.problems))
 
 
-def _strings(stage: str, obj: dict, key: str, *, min_len: int = 1, max_len: int = 40) -> list[str]:
-    if key not in obj:
-        raise ContractError(stage, [f"missing field '{key}'"])
-    value = obj[key]
-    if not isinstance(value, list):
-        raise ContractError(stage, [f"'{key}' must be a list, got {type(value).__name__}"])
-    problems: list[str] = []
-    out: list[str] = []
-    for i, item in enumerate(value):
-        if not isinstance(item, str):
-            problems.append(f"'{key}[{i}]' is not a string")
-            continue
-        item = item.strip()
-        if not item:
-            problems.append(f"'{key}[{i}]' is empty")
-            continue
-        # Cap a runaway item rather than failing: bounding is cheap, and the
-        # alternative punishes a model for being thorough.
-        out.append(item[:400])
-    if len(out) < min_len:
-        problems.append(f"'{key}' needs at least {min_len} item(s), got {len(out)}")
-    if problems:
-        raise ContractError(stage, problems)
-    # Too many is a size problem; too few is a did-not-do-the-job problem.
-    # We cap the first and fail the second.
-    return out[:max_len]
-
-
-def _text(stage: str, obj: dict, key: str, *, lo: int = 1, hi: int = 600) -> str:
-    if key not in obj:
-        raise ContractError(stage, [f"missing field '{key}'"])
-    value = obj[key]
-    if not isinstance(value, str) or not value.strip():
-        raise ContractError(stage, [f"'{key}' must be a non-empty string"])
-    value = value.strip()
-    if not lo <= len(value) <= hi:
-        raise ContractError(stage, [f"'{key}' is {len(value)} chars, outside {lo}-{hi}"])
+def _str_list(obj: dict, key: str, problems: list[str]) -> list[str]:
+    """Pull a list-of-strings field, reporting type problems."""
+    value = obj.get(key)
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        problems.append(f"{key} must be an array of strings")
+        return []
     return value
 
 
-# --------------------------------------------------------------------------
-# Stage 1 -- Scout
-# --------------------------------------------------------------------------
-@dataclass(frozen=True)
-class Brief:
-    idea: str
-    users: list[str]
-    core_jobs: list[str]
-    constraints: list[str]
-    ambiguities: list[str]
-    success_criteria: list[str]
+def _bounded(
+    key: str, items: list, low: int, high: int, problems: list[str]
+) -> list:
+    """Overflow caps; shortfall fails.
 
-    @classmethod
-    def from_dict(cls, stage: str, obj: dict) -> "Brief":
-        if not isinstance(obj, dict):
-            raise ContractError(stage, ["top level is not an object"])
-        return cls(
-            idea=_text(stage, obj, "idea", lo=3, hi=300),
-            users=_strings(stage, obj, "users", min_len=1, max_len=6),
-            core_jobs=_strings(stage, obj, "core_jobs", min_len=2, max_len=8),
-            constraints=_strings(stage, obj, "constraints", min_len=1, max_len=8),
-            ambiguities=_strings(stage, obj, "ambiguities", min_len=1, max_len=8),
-            success_criteria=_strings(stage, obj, "success_criteria", min_len=2, max_len=6),
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "idea": self.idea,
-            "users": self.users,
-            "core_jobs": self.core_jobs,
-            "constraints": self.constraints,
-            "ambiguities": self.ambiguities,
-            "success_criteria": self.success_criteria,
-        }
+    Too many items is a size problem — keep the first `high` and move on.
+    Too few is a did-not-do-the-job problem — fail the stage.
+    """
+    if len(items) < low:
+        problems.append(f"{key} needs at least {low}, got {len(items)}")
+        return items
+    return items[:high]
 
 
-# --------------------------------------------------------------------------
-# Stage 2 -- Architect
-# --------------------------------------------------------------------------
+def _check_len(key: str, value: str, low: int, high: int, problems: list[str]) -> None:
+    if not isinstance(value, str):
+        problems.append(f"{key} must be a string")
+    elif len(value) < low:
+        problems.append(f"{key} must be at least {low} chars, got {len(value)}")
+    elif len(value) > high:
+        problems.append(f"{key} must be at most {high} chars, got {len(value)}")
+
+
 @dataclass(frozen=True)
 class Entity:
     name: str
     fields: list[str]
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "fields": list(self.fields)}
+
+    @classmethod
+    def from_dict(cls, obj: Any, problems: list[str], where: str) -> "Entity | None":
+        if not isinstance(obj, dict):
+            problems.append(f"{where} must be an object with name/fields")
+            return None
+        name, fields_ = obj.get("name"), obj.get("fields")
+        if not isinstance(name, str) or not name:
+            problems.append(f"{where}.name must be a non-empty string")
+        if not isinstance(fields_, list) or not all(
+            isinstance(v, str) for v in fields_
+        ):
+            problems.append(f"{where}.fields must be an array of strings")
+        if name and isinstance(fields_, list):
+            return cls(name=name, fields=fields_)
+        return None
 
 
 @dataclass(frozen=True)
@@ -111,9 +90,84 @@ class Endpoint:
     path: str
     purpose: str
 
+    def to_dict(self) -> dict:
+        return {"method": self.method, "path": self.path, "purpose": self.purpose}
+
+    @classmethod
+    def from_dict(cls, obj: Any, problems: list[str], where: str) -> "Endpoint | None":
+        if not isinstance(obj, dict):
+            problems.append(f"{where} must be an object with method/path/purpose")
+            return None
+        method, path = obj.get("method"), obj.get("path")
+        purpose = obj.get("purpose", "")
+        if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+            problems.append(
+                f"{where}.method must be one of GET/POST/PUT/PATCH/DELETE, got {method!r}"
+            )
+        if not isinstance(path, str) or not path.startswith("/"):
+            problems.append(f"{where}.path must start with '/', got {path!r}")
+        if method in ("GET", "POST", "PUT", "PATCH", "DELETE") and isinstance(
+            path, str
+        ) and path.startswith("/"):
+            return cls(method=method, path=path, purpose=str(purpose))
+        return None
+
+
+@dataclass(frozen=True)
+class Brief:
+    """Scout's output: the idea, pinned down."""
+
+    ENTITY_MIN: ClassVar[int] = 0  # not used on Brief; keeps linters quiet
+
+    idea: str
+    users: list[str]
+    core_jobs: list[str]
+    constraints: list[str]
+    ambiguities: list[str]
+    success_criteria: list[str]
+
+    _REQUIRED: ClassVar[tuple] = (
+        "idea", "users", "core_jobs", "constraints", "ambiguities", "success_criteria",
+    )
+
+    @classmethod
+    def from_dict(cls, stage: str, obj: Any) -> "Brief":
+        problems: list[str] = []
+        if not isinstance(obj, dict):
+            raise ContractError(stage, ["expected a JSON object"])
+        # Report missing keys before counting anything else.
+        missing = [k for k in cls._REQUIRED if k not in obj]
+        if missing:
+            raise ContractError(stage, [f"missing field '{m}'" for m in missing])
+
+        idea = obj.get("idea")
+        _check_len("idea", idea if isinstance(idea, str) else "", 3, 300, problems)
+        users = _bounded("users", _str_list(obj, "users", problems), 1, 6, problems)
+        core_jobs = _bounded("core_jobs", _str_list(obj, "core_jobs", problems), 2, 8, problems)
+        constraints = _bounded("constraints", _str_list(obj, "constraints", problems), 1, 8, problems)
+        ambiguities = _bounded("ambiguities", _str_list(obj, "ambiguities", problems), 1, 8, problems)
+        success = _bounded("success_criteria", _str_list(obj, "success_criteria", problems), 2, 6, problems)
+
+        if problems:
+            raise ContractError(stage, problems)
+        return cls(
+            idea=idea, users=users, core_jobs=core_jobs, constraints=constraints,
+            ambiguities=ambiguities, success_criteria=success,
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "idea": self.idea, "users": list(self.users),
+            "core_jobs": list(self.core_jobs), "constraints": list(self.constraints),
+            "ambiguities": list(self.ambiguities),
+            "success_criteria": list(self.success_criteria),
+        }
+
 
 @dataclass(frozen=True)
 class Spec:
+    """Architect's output: the buildable spec."""
+
     name: str
     one_liner: str
     stack: list[str]
@@ -123,127 +177,131 @@ class Spec:
     out_of_scope: list[str]
     milestones: list[str]
 
+    _REQUIRED: ClassVar[tuple] = (
+        "name", "one_liner", "stack", "entities", "endpoints", "screens",
+        "out_of_scope", "milestones",
+    )
+
     @classmethod
-    def from_dict(cls, stage: str, obj: dict) -> "Spec":
-        if not isinstance(obj, dict):
-            raise ContractError(stage, ["top level is not an object"])
-        # Report absent keys before counting anything: "you forgot 'stack'" is
-        # more actionable than "you have 0 entities".
-        required = ("name", "one_liner", "stack", "entities", "endpoints",
-                    "screens", "out_of_scope", "milestones")
-        missing = [k for k in required if k not in obj]
-        if missing:
-            raise ContractError(stage, [f"missing field '{k}'" for k in missing])
-
+    def from_dict(cls, stage: str, obj: Any) -> "Spec":
         problems: list[str] = []
+        if not isinstance(obj, dict):
+            raise ContractError(stage, ["expected a JSON object"])
+        missing = [k for k in cls._REQUIRED if k not in obj]
+        if missing:
+            raise ContractError(stage, [f"missing field '{m}'" for m in missing])
 
+        _check_len("name", obj.get("name") if isinstance(obj.get("name"), str) else "", 2, 60, problems)
+        _check_len("one_liner", obj.get("one_liner") if isinstance(obj.get("one_liner"), str) else "", 10, 300, problems)
+        stack = _bounded("stack", _str_list(obj, "stack", problems), 2, 12, problems)
+        screens = _bounded("screens", _str_list(obj, "screens", problems), 1, 10, problems)
+        out_of_scope = _bounded("out_of_scope", _str_list(obj, "out_of_scope", problems), 1, 8, problems)
+        milestones = _bounded("milestones", _str_list(obj, "milestones", problems), 3, 8, problems)
+
+        raw_entities = obj.get("entities")
         entities: list[Entity] = []
-        for i, raw in enumerate(obj.get("entities") or []):
-            if not isinstance(raw, dict) or not isinstance(raw.get("name"), str):
-                problems.append(f"entities[{i}] must be an object with a 'name'")
-                continue
-            fields = raw.get("fields")
-            if not isinstance(fields, list) or not all(isinstance(f, str) and f.strip() for f in fields):
-                problems.append(f"entities[{i}].fields must be a list of non-empty strings")
-                continue
-            entities.append(Entity(raw["name"].strip(), [f.strip() for f in fields]))
-        if len(entities) < 2:
-            problems.append(f"entities needs at least 2, got {len(entities)}")
-        elif len(entities) > 15:
-            entities = entities[:15]  # cap, do not fail
+        if not isinstance(raw_entities, list):
+            problems.append("entities must be an array of {name, fields} objects")
+        else:
+            for i, e in enumerate(raw_entities):
+                got = Entity.from_dict(e, problems, f"entities[{i}]")
+                if got is not None:
+                    entities.append(got)
+            entities = _bounded("entities", entities, 2, 15, problems)
 
+        raw_endpoints = obj.get("endpoints")
         endpoints: list[Endpoint] = []
-        allowed = {"GET", "POST", "PUT", "PATCH", "DELETE"}
-        for i, raw in enumerate(obj.get("endpoints") or []):
-            if not isinstance(raw, dict):
-                problems.append(f"endpoints[{i}] must be an object")
-                continue
-            method = str(raw.get("method", "")).upper().strip()
-            path, purpose = raw.get("path"), raw.get("purpose")
-            if method not in allowed:
-                problems.append(f"endpoints[{i}].method '{method}' is not a valid HTTP verb")
-                continue
-            if not isinstance(path, str) or not path.startswith("/"):
-                problems.append(f"endpoints[{i}].path must start with '/'")
-                continue
-            if not isinstance(purpose, str) or not purpose.strip():
-                problems.append(f"endpoints[{i}].purpose is missing")
-                continue
-            endpoints.append(Endpoint(method, path.strip(), purpose.strip()))
-        if len(endpoints) < 3:
-            problems.append(f"endpoints needs at least 3, got {len(endpoints)}")
-        elif len(endpoints) > 25:
-            endpoints = endpoints[:25]  # cap, do not fail
+        if not isinstance(raw_endpoints, list):
+            problems.append("endpoints must be an array of {method, path, purpose} objects")
+        else:
+            for i, e in enumerate(raw_endpoints):
+                got = Endpoint.from_dict(e, problems, f"endpoints[{i}]")
+                if got is not None:
+                    endpoints.append(got)
+            endpoints = _bounded("endpoints", endpoints, 3, 25, problems)
+
+        # Overflow caps, shortfall fails: cap here so the record that survives
+        # is always in-bounds.
+        entities = entities[:15]
+        endpoints = endpoints[:25]
 
         if problems:
             raise ContractError(stage, problems)
-
         return cls(
-            name=_text(stage, obj, "name", lo=2, hi=60),
-            one_liner=_text(stage, obj, "one_liner", lo=10, hi=300),
-            stack=_strings(stage, obj, "stack", min_len=2, max_len=12),
-            entities=entities,
-            endpoints=endpoints,
-            screens=_strings(stage, obj, "screens", min_len=1, max_len=10),
-            out_of_scope=_strings(stage, obj, "out_of_scope", min_len=1, max_len=8),
-            milestones=_strings(stage, obj, "milestones", min_len=3, max_len=8),
+            name=obj["name"], one_liner=obj["one_liner"], stack=stack,
+            entities=entities, endpoints=endpoints, screens=screens,
+            out_of_scope=out_of_scope, milestones=milestones,
         )
 
     def to_dict(self) -> dict:
         return {
-            "name": self.name,
-            "one_liner": self.one_liner,
-            "stack": self.stack,
-            "entities": [{"name": e.name, "fields": e.fields} for e in self.entities],
-            "endpoints": [{"method": e.method, "path": e.path, "purpose": e.purpose} for e in self.endpoints],
-            "screens": self.screens,
-            "out_of_scope": self.out_of_scope,
-            "milestones": self.milestones,
+            "name": self.name, "one_liner": self.one_liner,
+            "stack": list(self.stack),
+            "entities": [e.to_dict() for e in self.entities],
+            "endpoints": [e.to_dict() for e in self.endpoints],
+            "screens": list(self.screens),
+            "out_of_scope": list(self.out_of_scope),
+            "milestones": list(self.milestones),
         }
-
-
-# --------------------------------------------------------------------------
-# Stage 3 -- Critic
-# --------------------------------------------------------------------------
-VERDICTS = ("ship", "revise", "blocked")
 
 
 @dataclass(frozen=True)
 class Review:
-    verdict: str
+    """Critic's output: verdict + the revised spec."""
+
+    verdict: str  # ship | revise | blocked
     gaps: list[str]
     risks: list[str]
     confidence: float
     spec: Spec
 
+    _REQUIRED: ClassVar[tuple] = ("verdict", "gaps", "risks", "confidence", "spec")
+
     @classmethod
-    def from_dict(cls, stage: str, obj: dict) -> "Review":
+    def from_dict(cls, stage: str, obj: Any) -> "Review":
+        problems: list[str] = []
         if not isinstance(obj, dict):
-            raise ContractError(stage, ["top level is not an object"])
+            raise ContractError(stage, ["expected a JSON object"])
+        missing = [k for k in cls._REQUIRED if k not in obj]
+        if "spec" in missing:
+            # Name the specific failure the workflow keeps hitting.
+            raise ContractError(stage, ["the revised spec must be returned"])
+        if missing:
+            raise ContractError(stage, [f"missing field '{m}'" for m in missing])
+
         verdict = obj.get("verdict")
-        if verdict not in VERDICTS:
-            raise ContractError(stage, [f"verdict must be one of {VERDICTS}, got {verdict!r}"])
+        if verdict not in ("ship", "revise", "blocked"):
+            problems.append(
+                f"verdict must be ship|revise|blocked, got {verdict!r}"
+            )
+        gaps = _bounded("gaps", _str_list(obj, "gaps", problems), 1, 8, problems)
+        risks = _bounded("risks", _str_list(obj, "risks", problems), 1, 8, problems)
 
         confidence = obj.get("confidence")
-        if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
-            raise ContractError(stage, ["confidence must be a number in [0, 1]"])
+        if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+            problems.append("confidence must be a number in [0,1]")
+        elif not 0.0 <= float(confidence) <= 1.0:
+            problems.append(
+                f"confidence must be in [0,1], got {confidence}"
+            )
 
-        if "spec" not in obj:
-            raise ContractError(stage, ["missing field 'spec' (the revised spec must be returned)"])
+        # A missing or invalid nested spec fails here, at the critic's stage —
+        # a Review without a spec is not a review.
+        try:
+            spec = Spec.from_dict(stage, obj.get("spec"))
+        except ContractError as e:
+            raise ContractError(stage, [f"revised spec invalid: {e}"]) from None
 
+        if problems:
+            raise ContractError(stage, problems)
         return cls(
-            verdict=verdict,
-            gaps=_strings(stage, obj, "gaps", min_len=1, max_len=8),
-            risks=_strings(stage, obj, "risks", min_len=1, max_len=8),
-            confidence=float(confidence),
-            spec=Spec.from_dict(stage, obj["spec"]),
+            verdict=verdict, gaps=gaps, risks=risks,
+            confidence=float(confidence), spec=spec,
         )
 
     def to_dict(self) -> dict:
         return {
-            "verdict": self.verdict,
-            "gaps": self.gaps,
-            "risks": self.risks,
-            "confidence": self.confidence,
+            "verdict": self.verdict, "gaps": list(self.gaps),
+            "risks": list(self.risks), "confidence": self.confidence,
             "spec": self.spec.to_dict(),
         }

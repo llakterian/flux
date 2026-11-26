@@ -1,22 +1,23 @@
-"""The system under test: three sub-agents, typed handoff, one verdict.
+"""The system under test: Scout -> Architect -> Critic.
 
-    Scout -> Brief -> Architect -> Spec -> Critic -> Review(+revised Spec)
+Three sub-agents turn a vague one-liner into a buildable spec. Every stage
+speaks in typed records (contracts.py), never prose. The prompts are
+module-level constants so the rig and the tests can import them verbatim.
 
-Nothing here is scored. The rig in guardrails/judge/scoring measures the
-output; it never imports this module (AGENTS.md, "The shape").
+Injection default: the user's idea is DATA wrapped in <IDEA> tags, and the
+Scout prompt says so. No prompt is ever built by string concatenation from
+user input — the idea only ever appears inside a delimited block in the user
+message.
 """
-
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING
 
 from .contracts import Brief, ContractError, Review, Spec
-from .llm import LLM
 
-DELIM_OPEN = "<IDEA>"
-DELIM_CLOSE = "</IDEA>"
+if TYPE_CHECKING:  # Config supplies the client; avoid a hard order dependency.
+    from .llm import LLM
 
 SCOUT_SYSTEM = """You are Scout, the first stage of a build pipeline.
 Your job is to convert a vague product idea into a precise brief.
@@ -37,7 +38,6 @@ Return one JSON object with keys:
   idea, users, core_jobs, constraints, ambiguities, success_criteria
 All values are arrays of strings except "idea", which is a single string."""
 
-
 ARCHITECT_SYSTEM = """You are Architect, the second stage of a build pipeline.
 You receive a validated Brief and produce a buildable spec.
 
@@ -56,7 +56,6 @@ where entities is [{name, fields}] and endpoints is [{method, path, purpose}].
 Types are part of the contract: stack, screens, out_of_scope and milestones are
 JSON arrays of strings -- never one comma-joined string. entities is an array of
 at least 2 objects; endpoints is an array of at least 3 objects."""
-
 
 CRITIC_SYSTEM = """You are Critic, the final stage of a build pipeline.
 You receive a Brief and the Architect's Spec.
@@ -80,14 +79,13 @@ where "spec" is the full revised spec in the same shape you received it: every
 list field is a JSON array of strings, entities has at least 2 objects and
 endpoints at least 3."""
 
-
-# The regression under test. Both changes are realistic: a "simplify" PR that
-# trims the Critic's revision step and tells the Architect to be brief.
+# The mutant is a realistic "simplify" PR: trim the rules a reviewer would
+# never notice in a diff. If the rig cannot catch THIS, it catches nothing.
 ARCHITECT_SYSTEM_MUTANT = ARCHITECT_SYSTEM.replace(
-    "- out_of_scope is not optional. Naming what you refuse to build is the single\n"
-    "  clearest signal that you understood the problem. An empty or vague\n"
-    "  out_of_scope is a failed spec.\n",
-    "- Keep it brief. A short out_of_scope is fine.\n",
+    """- out_of_scope is not optional. Naming what you refuse to build is the single
+  clearest signal that you understood the problem. An empty or vague
+  out_of_scope is a failed spec.""",
+    "- Keep it brief. A short out_of_scope is fine.",
 ).replace(
     "- Milestones are ordered and each one is independently demoable.",
     "- Milestones: list the minimum needed.",
@@ -100,83 +98,74 @@ Summarise your assessment. Return one JSON object with keys:
   verdict, gaps, risks, confidence, spec
 where "spec" is the spec you were given, unchanged."""
 
+_CONTRACT_FEEDBACK = (
+    "Your previous reply failed contract validation:\n{error}\n"
+    "Return the JSON object again with exactly those problems fixed."
+)
 
-class WorkflowError(RuntimeError):
-    """A stage failed to produce a valid contract."""
+
+class WorkflowError(Exception):
+    """A stage failed after its one contract-feedback retry."""
 
 
 class Workflow:
-    def __init__(self, llm: LLM, *, mutant: bool = False):
+    """Scout -> Architect -> Critic, with typed handoffs.
+
+    One retry, not a loop: the model gets its own ContractError text back once
+    at temperature 0. A second failure means the stage cannot do the job —
+    looping would only spend money to disagree.
+    """
+
+    def __init__(self, llm: "LLM", mutant: bool = False):
         self.llm = llm
-        self.mutant = mutant
-        self.trace: list[dict[str, Any]] = []
+        self.scout_system = SCOUT_SYSTEM
+        self.architect_system = ARCHITECT_SYSTEM_MUTANT if mutant else ARCHITECT_SYSTEM
+        self.critic_system = CRITIC_SYSTEM_MUTANT if mutant else CRITIC_SYSTEM
+        # The trace lets the driver recover Brief and pre-critique Spec
+        # WITHOUT reaching into internals — the same black-box rule the
+        # scoring half obeys, applied to the driver itself.
+        self.trace: list[dict] = []
+
+    # -- internals ---------------------------------------------------------
+
+    def _run_stage(self, stage: str, system: str, user_msg: str, parse):
+        try:
+            return parse(stage, self.llm.json(system, user_msg))
+        except ContractError as e:
+            # One feedback round carrying the model its own error message.
+            retry_msg = user_msg + "\n\n" + _CONTRACT_FEEDBACK.format(error=str(e))
+            try:
+                return parse(stage, self.llm.json(system, retry_msg, temperature=0.0))
+            except ContractError as e2:
+                raise WorkflowError(str(e2)) from None
+
+    # -- stages ------------------------------------------------------------
 
     def run(self, idea: str) -> Review:
-        idea = idea.strip()
-        if not idea:
-            raise WorkflowError("empty idea")
         self.trace = []
 
-        brief = self._scout(idea)
-        spec = self._architect(brief)
-        review = self._critic(brief, spec)
-        return review
-
-    # -- stage 1 -----------------------------------------------------------
-    def _scout(self, idea: str) -> Brief:
-        brief = self._parse_stage("scout", SCOUT_SYSTEM, _wrap(idea), Brief.from_dict)
-        self._record("scout", brief.to_dict())
-        return brief
-
-    # -- stage 2 -----------------------------------------------------------
-    def _architect(self, brief: Brief) -> Spec:
-        system = ARCHITECT_SYSTEM_MUTANT if self.mutant else ARCHITECT_SYSTEM
-        user = (
-            "Brief to design from:\n"
-            + json.dumps(brief.to_dict(), indent=2)
+        brief = self._run_stage(
+            "scout",
+            self.scout_system,
+            f"Analyse this idea:\n<IDEA>\n{idea}\n</IDEA>",
+            Brief.from_dict,
         )
-        spec = self._parse_stage("architect", system, user, Spec.from_dict)
-        self._record("architect", spec.to_dict())
-        return spec
+        self.trace.append({"stage": "scout", "output": brief.to_dict()})
 
-    # -- stage 3 -----------------------------------------------------------
-    def _critic(self, brief: Brief, spec: Spec) -> Review:
-        system = CRITIC_SYSTEM_MUTANT if self.mutant else CRITIC_SYSTEM
-        user = (
-            "Brief:\n"
-            + json.dumps(brief.to_dict(), indent=2)
-            + "\n\nSpec to review:\n"
-            + json.dumps(spec.to_dict(), indent=2)
+        architect_spec = self._run_stage(
+            "architect",
+            self.architect_system,
+            "Brief to design from:\n" + json.dumps(brief.to_dict(), indent=2),
+            Spec.from_dict,
         )
-        review = self._parse_stage("critic", system, user, Review.from_dict)
-        self._record("critic", review.to_dict())
+        self.trace.append({"stage": "architect", "output": architect_spec.to_dict()})
+
+        review = self._run_stage(
+            "critic",
+            self.critic_system,
+            "Brief:\n" + json.dumps(brief.to_dict(), indent=2)
+            + "\n\nSpec to review:\n" + json.dumps(architect_spec.to_dict(), indent=2),
+            Review.from_dict,
+        )
+        self.trace.append({"stage": "critic", "output": review.to_dict()})
         return review
-
-    def _parse_stage(self, stage: str, system: str, user: str,
-                     parse: Callable[[str, dict[str, Any]], Any]) -> Any:
-        """One contract-feedback round before failing loudly.
-
-        The contract still decides -- this only hands the model its own error
-        message once instead of burning the whole run on a comma-joined list.
-        """
-        try:
-            return parse(stage, self.llm.json(system, user))
-        except ContractError as exc:
-            retry = (
-                user
-                + "\n\nYour previous reply failed contract validation:\n"
-                + str(exc)
-                + "\nReturn the JSON object again with exactly those problems fixed."
-            )
-            try:
-                return parse(stage, self.llm.json(system, retry, temperature=0))
-            except ContractError as exc2:
-                raise WorkflowError(str(exc2)) from exc2
-
-    def _record(self, stage: str, output: dict) -> None:
-        self.trace.append({"stage": stage, "output": output})
-
-
-def _wrap(idea: str) -> str:
-    """User text goes in a delimited block. It is data, per SCOUT_SYSTEM."""
-    return f"Analyse this idea:\n{DELIM_OPEN}\n{idea}\n{DELIM_CLOSE}"
