@@ -93,7 +93,7 @@ python run.py eval --mutant                                    # prove the rig c
 pytest -q                                                      # the rig's own tests
 ```
 
-`eval` needs `OPENROUTER_API_KEY`, `GROQ_API_KEY` or `OPENAI_API_KEY`.
+`eval` needs a provider key: `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY` or `OPENAI_API_KEY`.
 `pytest` needs nothing — the regression tests run against fixtures and must
 never hit the network.
 
