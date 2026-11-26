@@ -1,4 +1,4 @@
-# AGENTS.md — certified metrics harness
+# AGENTS.md: certified metrics harness
 
 ## Mission
 Answer business questions from a snapshot of an API I have never used.

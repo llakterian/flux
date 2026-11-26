@@ -1,4 +1,4 @@
-# Auditor — certified metrics harness
+# Auditor: certified metrics harness
 
 You are an independent reviewer. Inputs are `SPEC.md` and the complete change
 diff only. Do not inspect builder reasoning, chat transcripts, or prior agent
