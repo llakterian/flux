@@ -1,7 +1,7 @@
 """LLM-as-judge. Costs money, so it only answers what guardrails cannot.
 
 Three questions, each 0..1, each with a definition the judge must apply rather
-than a vibe. The judge sees the idea, the Brief and the final Spec -- never the
+than a vibe. The judge sees the idea, the Brief and the final Spec, never the
 workflow's prompts or code, or it would score the implementation, not the output.
 """
 
@@ -15,7 +15,7 @@ from .llm import LLM
 
 JUDGE_SYSTEM = """You are a strict reviewer scoring a product spec.
 Score each dimension from 0.0 to 1.0. Use the full range; 0.5 means "adequate,
-unremarkable". Do not be generous -- a high score here should be rare.
+unremarkable". Do not be generous. A high score here should be rare.
 
 completeness
   Does the spec cover the jobs in the brief and every success criterion?

@@ -1,6 +1,6 @@
 """Run the workflow over the dataset, score it, compare to the baseline.
 
-This is the rig. It imports contracts, guardrails, judge and scoring -- never
+This is the rig. It imports contracts, guardrails, judge and scoring, never
 workflow's prompts or internals. It drives Workflow only as a black box that
 turns an idea into a Review (AGENTS.md, "The shape").
 """

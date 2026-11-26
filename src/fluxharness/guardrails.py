@@ -255,7 +255,7 @@ def _check_stack_real(spec: Spec, add) -> None:
     would flag every tool added since the list was written, and a false
     positive here zeroes a case whose output was fine. So the known list
     identifies technology we recognise, and anything outside it is judged by
-    its shape -- a coinage built from hallucination morphemes is invented
+    its shape. A coinage built from hallucination morphemes is invented
     (hard fail); anything else is merely unfamiliar (warning).
     """
     invented: list[str] = []
@@ -278,7 +278,7 @@ def _check_stack_real(spec: Spec, add) -> None:
 
 
 # "React 18", "Next.js 15", "PostgreSQL (managed)" must match the same
-# technology as their bare name -- version and packaging noise is not
+# technology as their bare name, version and packaging noise is not
 # invention. Invented names still fail: they have nothing to normalise to.
 _VERSION_NOISE = re.compile(r"\s*\([^)]*\)|\s+v?\d+(?:\.\d+)*(?:\s+(?:lts|latest))?$", re.IGNORECASE)
 

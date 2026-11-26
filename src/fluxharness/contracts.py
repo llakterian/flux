@@ -1,6 +1,6 @@
 """Typed handoff records between sub-agents.
 
-A sub-agent that produces garbage must fail *at its own stage*, named — not
+A sub-agent that produces garbage must fail *at its own stage*, named. Not
 three stages downstream when someone finally reads the garbage in an eval.
 These records are the contract: validated on the way out of one stage and on
 the way into the next, with errors that name the stage and the offending field.
@@ -41,8 +41,8 @@ def _bounded(
 ) -> list:
     """Overflow caps; shortfall fails.
 
-    Too many items is a size problem — keep the first `high` and move on.
-    Too few is a did-not-do-the-job problem — fail the stage.
+    Too many items is a size problem, keep the first `high` and move on.
+    Too few is a did-not-do-the-job problem, fail the stage.
     """
     if len(items) < low:
         problems.append(f"{key} needs at least {low}, got {len(items)}")
@@ -285,7 +285,7 @@ class Review:
                 f"confidence must be in [0,1], got {confidence}"
             )
 
-        # A missing or invalid nested spec fails here, at the critic's stage —
+        # A missing or invalid nested spec fails here, at the critic's stage: 
         # a Review without a spec is not a review.
         try:
             spec = Spec.from_dict(stage, obj.get("spec"))

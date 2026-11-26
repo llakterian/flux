@@ -2,7 +2,7 @@
 
 Deliberately not built on the `openai` package: one endpoint, one payload shape,
 nothing to upgrade under us mid-recording. Retries are on transport and
-malformed-JSON only -- a valid "this is unanswerable" reply is not a failure.
+malformed-JSON only. A valid "this is unanswerable" reply is not a failure.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class LLM:
             "temperature": self.cfg.temperature if temperature is None else temperature,
             # Reasoning models spend completion tokens on thinking before they
             # emit a token of content. Starve this and you get finish_reason
-            # "length" with an empty body -- a failure that looks like the
+            # "length" with an empty body. A failure that looks like the
             # model ignored you.
             "max_tokens": self.cfg.max_tokens,
         }
@@ -74,7 +74,7 @@ class LLM:
             except RateLimited as exc:
                 last = exc
                 if attempt < self.cfg.max_retries:
-                    # Rate limits do not clear in 1.5s. Back off hard -- a
+                    # Rate limits do not clear in 1.5s. Back off hard. A
                     # recording is the worst place to burn the remaining quota.
                     time.sleep(min(5 * (3 ** attempt), 30))
             except CompletionStarved as exc:
@@ -141,7 +141,7 @@ class LLM:
         except ValueError:
             repair = (
                 "Your previous reply was not a single valid JSON object. "
-                "Reply with the JSON object only -- no markdown fence, no commentary.\n\n"
+                "Reply with the JSON object only. No markdown fence, no commentary.\n\n"
                 f"Previous reply:\n{raw[:2000]}"
             )
             raw = self.chat(system, repair, json_mode=False, temperature=0)

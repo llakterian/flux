@@ -5,7 +5,7 @@ The shape of the score is a deliberate choice:
     hard guardrail failure  -> 0.0, no appeal
     otherwise               -> 0.4 * guardrail_fraction + 0.6 * judge_average
 
-A guardrail failure means the artifact is structurally broken -- the critic
+A guardrail failure means the artifact is structurally broken. The critic
 echoed, a secret leaked, the stack is invented. No amount of nice prose earns
 that back, so it does not get a vote. Guardrails keep 40% because they are the
 part that is free, deterministic and impossible to talk your way out of; the

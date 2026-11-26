@@ -76,7 +76,7 @@ def test_healthy_artifact_scores_and_passes():
 
 
 # --------------------------------------------------------------------------
-# 2. Individual guardrails -- the free checks, each proven to bite.
+# 2. Individual guardrails. The free checks, each proven to bite.
 # --------------------------------------------------------------------------
 def _brief() -> Brief:
     return Brief(
@@ -126,7 +126,7 @@ def test_invented_technology_is_caught():
 def test_real_technology_spellings_are_not_invented():
     """Real tech written in an ordinary spelling must not be scored as invented.
 
-    A hard fail here zeroes a case whose output was fine -- the model wrote
+    A hard fail here zeroes a case whose output was fine. The model wrote
     "Cloudflare Workers" with a hyphen, not a fake framework.
     """
     real = [
@@ -226,7 +226,7 @@ def test_every_guardrail_rule_can_still_fire():
     """A rule nobody exercises is a rule that quietly stops working.
 
     Rebuilds a deliberately awful artifact that trips all ten rules at once and
-    asserts the set of fired rules matches the declared set exactly -- so a rule
+    asserts the set of fired rules matches the declared set exactly. So a rule
     that stops firing (or a new one added without a test) fails here.
     """
     from fluxharness.guardrails import GuardrailReport
@@ -258,7 +258,7 @@ def test_every_guardrail_rule_can_still_fire():
 
 
 # --------------------------------------------------------------------------
-# 3. Baseline comparison -- a drop is a regression, a rise is not.
+# 3. Baseline comparison. A drop is a regression, a rise is not.
 # --------------------------------------------------------------------------
 def test_drop_beyond_threshold_is_flagged():
     baseline = {"overall": 0.80, "taste": 0.70, "completeness": 0.90,
@@ -299,7 +299,7 @@ def test_aggregate_is_mean_over_scored_cases():
 
 
 # --------------------------------------------------------------------------
-# 4. Contracts -- a malformed handoff fails at its own stage, by name.
+# 4. Contracts. A malformed handoff fails at its own stage, by name.
 # --------------------------------------------------------------------------
 def test_contract_names_the_offending_field():
     with pytest.raises(ContractError) as exc:
@@ -354,7 +354,7 @@ def test_scoring_modules_never_import_the_system_under_test():
     """AGENTS.md: the rig must not know how the workflow is written.
 
     If guardrails/judge/scoring start reaching into workflow.py, they begin
-    measuring the implementation instead of the artifact -- which is exactly how
+    measuring the implementation instead of the artifact, which is exactly how
     an eval suite rots while staying green.
     """
     rig = ["guardrails.py", "judge.py", "scoring.py"]
@@ -379,7 +379,7 @@ def test_baseline_records_which_judge_produced_it(tmp_path):
 
     Re-scoring the same code with a different judge is a different
     measurement, not a regression. So the baseline has to say which judge
-    wrote it -- otherwise two baselines get compared as if they were the
+    wrote it, otherwise two baselines get compared as if they were the
     same instrument.
     """
     report = EvalReport(

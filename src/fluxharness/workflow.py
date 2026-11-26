@@ -6,7 +6,7 @@ module-level constants so the rig and the tests can import them verbatim.
 
 Injection default: the user's idea is DATA wrapped in <IDEA> tags, and the
 Scout prompt says so. No prompt is ever built by string concatenation from
-user input — the idea only ever appears inside a delimited block in the user
+user input. The idea only ever appears inside a delimited block in the user
 message.
 """
 from __future__ import annotations
@@ -54,14 +54,14 @@ Return one JSON object with keys:
   name, one_liner, stack, entities, endpoints, screens, out_of_scope, milestones
 where entities is [{name, fields}] and endpoints is [{method, path, purpose}].
 Types are part of the contract: stack, screens, out_of_scope and milestones are
-JSON arrays of strings -- never one comma-joined string. entities is an array of
+JSON arrays of strings, never one comma-joined string. entities is an array of
 at least 2 objects; endpoints is an array of at least 3 objects."""
 
 CRITIC_SYSTEM = """You are Critic, the final stage of a build pipeline.
 You receive a Brief and the Architect's Spec.
 
 Two jobs, in order:
-1. Find what is missing, wrong or over-built. Be specific and few -- three real
+1. Find what is missing, wrong or over-built. Be specific and few. Three real
    gaps beat eight vague ones.
 2. RETURN A REVISED SPEC. You must actually change the spec to close the gaps
    you found. If your returned spec is byte-identical to the one you were given,
@@ -112,7 +112,7 @@ class Workflow:
     """Scout -> Architect -> Critic, with typed handoffs.
 
     One retry, not a loop: the model gets its own ContractError text back once
-    at temperature 0. A second failure means the stage cannot do the job —
+    at temperature 0. A second failure means the stage cannot do the job:
     looping would only spend money to disagree.
     """
 
@@ -122,11 +122,11 @@ class Workflow:
         self.architect_system = ARCHITECT_SYSTEM_MUTANT if mutant else ARCHITECT_SYSTEM
         self.critic_system = CRITIC_SYSTEM_MUTANT if mutant else CRITIC_SYSTEM
         # The trace lets the driver recover Brief and pre-critique Spec
-        # WITHOUT reaching into internals — the same black-box rule the
+        # WITHOUT reaching into internals: the same black-box rule the
         # scoring half obeys, applied to the driver itself.
         self.trace: list[dict] = []
 
-    # -- internals ---------------------------------------------------------
+    #, internals ---------------------------------------------------------
 
     def _run_stage(self, stage: str, system: str, user_msg: str, parse):
         try:
@@ -139,7 +139,7 @@ class Workflow:
             except ContractError as e2:
                 raise WorkflowError(str(e2)) from None
 
-    # -- stages ------------------------------------------------------------
+    #, stages ------------------------------------------------------------
 
     def run(self, idea: str) -> Review:
         self.trace = []

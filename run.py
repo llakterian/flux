@@ -31,7 +31,7 @@ from fluxharness.scoring import baseline_update_allowed     # noqa: E402
 
 
 class C:
-    """Minimal ANSI helpers -- no dependency, no colour unless a TTY."""
+    """Minimal ANSI helpers. No dependency, no colour unless a TTY."""
 
     def __init__(self) -> None:
         self.on = sys.stdout.isatty()
@@ -94,7 +94,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     arch = stages["architect"]
     print(c.orange("\n  2 · ARCHITECT  ") + c.dim("→ Spec"))
-    print(f"     {c.bold(arch['name'])} — {arch['one_liner']}")
+    print(f"     {c.bold(arch['name'])}, {arch['one_liner']}")
     print(f"     stack      {', '.join(arch['stack'])}")
     print(f"     entities   {len(arch['entities'])} · endpoints {len(arch['endpoints'])} · "
           f"screens {len(arch['screens'])}")
@@ -188,15 +188,15 @@ def cmd_eval(args: argparse.Namespace) -> int:
         # numbers are history rather than a regression.
         if baseline and not args.force and not baseline_update_allowed(report.aggregate, baseline):
             print(c.red("\n  refusing to replace the baseline: this run scores lower than the saved one."))
-            print(c.dim("  A baseline only moves sideways or up. If the instrument changed -- a different"))
-            print(c.dim("  judge model, a different prompt -- re-run with --force and say why in the commit."))
+            print(c.dim("  A baseline only moves sideways or up. If the instrument changed. A different"))
+            print(c.dim("  judge model, a different prompt, re-run with --force and say why in the commit."))
             for line in report.regressions:
                 print(c.red(f"    ✗ {line}"))
             return 1
         save_baseline(report, previous=baseline if args.force else None)
         print(c.green(f"\n  ✓ baseline saved → {BASELINE_PATH}"))
         if args.force and baseline:
-            print(c.dim(f"  (forced — the previous aggregate was overall {baseline.get('overall', 0):.3f}; "
+            print(c.dim(f"  (forced. The previous aggregate was overall {baseline.get('overall', 0):.3f}; "
                         f"it is kept in the file under previous_aggregate)"))
     elif report.regressions:
         print(c.red("\n  REGRESSIONS vs baseline:"))
@@ -205,7 +205,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         print(c.dim(f"\n  baseline: {BASELINE_PATH}"))
         return 1
     elif not baseline:
-        print(c.dim("\n  no baseline yet — run with --save-baseline to set one"))
+        print(c.dim("\n  no baseline yet, run with --save-baseline to set one"))
 
     print()
     return 0

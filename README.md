@@ -2,7 +2,7 @@
 
 **A mini eval harness that scores an AI agent's output and catches regressions.**
 
-One-line idea in, buildable spec out — and a number that says whether the agent
+One-line idea in, buildable spec out. And a number that says whether the agent
 is actually any good.
 
 ---
@@ -16,11 +16,11 @@ window, so the PR merged.
 
 fluxharness makes that measurable:
 
-1. **Deterministic guardrails score first.** Ten cheap rules — is the output
+1. **Deterministic guardrails score first.** Ten cheap rules: is the output
    empty, does it contain a forbidden token, is every field present and typed,
    does it exceed the budget. Same input, same verdict, every run, no model
    involved.
-2. **An LLM judge only answers what regex can't.** Composition and taste —
+2. **An LLM judge only answers what regex can't.** Composition and taste:
    is the spec coherent, is the prose actually usable. The judge is a *separate,
    larger model* from the one under test, so sharing weights cannot flatter
    the output.
@@ -85,10 +85,10 @@ python run.py eval
 python run.py eval --mutant --limit 2
 ```
 
-- `run` — one idea, end to end: the verdict, the critic's revisions, the call
+- `run`: one idea, end to end: the verdict, the critic's revisions, the call
   and token counts, and the trace.
-- `eval` — the full dataset against the saved baseline, per case.
-- `eval --mutant` — the honesty check (see below).
+- `eval`: the full dataset against the saved baseline, per case.
+- `eval --mutant`: the honesty check (see below).
 
 ### The baseline only moves sideways or up
 
@@ -98,20 +98,20 @@ README nobody rereads:
 
 - `eval --save-baseline` **refuses** to replace a baseline with lower scores.
 - `eval --save-baseline --force` is the explicit override for the one case
-  where the numbers are not comparable — **the instrument changed** (a
+  where the numbers are not comparable, **the instrument changed** (a
   different judge model, a different prompt). The replaced aggregate is kept
   in the file under `previous_aggregate`, so the change stays on the record.
 - The baseline records the `model` and the `judge_model` that produced it.
   Re-scoring the same code with a different judge is a different measurement,
-  not a regression — and the file says so.
+  not a regression. And the file says so.
 
 ---
 
 ## The rig refuses to green-wash itself
 
 An eval suite that cannot catch its own regressions is decoration. So the
-harness has a **mutation mode**: it deliberately weakens the workflow — trims
-the Critic's revision, tells the Architect to be brief — and then runs the
+harness has a **mutation mode**: it deliberately weakens the workflow, trims
+the Critic's revision, tells the Architect to be brief. And then runs the
 suite against the mutant.
 
 ```
@@ -119,8 +119,8 @@ overall 0.000   pass rate 0%   regressions vs baseline printed
 ```
 
 The mutant is not merely worse: the deterministic guardrail
-`critic_actually_revised` fires — *"Critic returned the Architect's spec
-byte-for-byte; no review happened"* — and the case scores zero. On other
+`critic_actually_revised` fires, *"Critic returned the Architect's spec
+byte-for-byte; no review happened"*. And the case scores zero. On other
 mutants it breaks the contract outright (`[critic] confidence must be a number
 in [0,1]`), and the harness reports the failure **by name**. That is also the
 proof: the rig catches a realistic simplification PR, not just a random
@@ -135,8 +135,8 @@ mutation.
   surfacing three stages later as a confusing eval failure.
 - **Overflow caps, shortfall fails.** If the model returns ten users and six
   were asked for, keep six and say so. If it returns three, that is a
-  failure — not something to paper over quietly.
-- **One repair round, using the model's own error text.** Not "try again" —
+  failure. Not something to paper over quietly.
+- **One repair round, using the model's own error text.** Not "try again":
   the actual validation error, with the offending fields named, and exactly
   one more attempt. A loop that retries forever is a loop that hides a broken
   prompt.
@@ -147,7 +147,7 @@ mutation.
   `judge.py` and `scoring.py` must not know how the workflow is implemented;
   a test reads their source to prove it. The moment a scorer needs to know how
   the output was made, it has started measuring the implementation instead of
-  the artifact — which is how eval suites go stale while staying green.
+  the artifact, which is how eval suites go stale while staying green.
 
 `AGENTS.md` is the longer version of this, and it is the document the tests
 hold the code to.
@@ -160,17 +160,31 @@ hold the code to.
 |---|---|
 | Unit tests | **31 passed**, no account required |
 | Model under test | `nvidia/nemotron-3.5-lightning-30b-a3b` (30B, NVIDIA NIM) |
-| Judge | `nvidia/nemotron-3-ultra-550b-a55b` (550B) — separate and larger; never overrides a guardrail |
+| Judge | `nvidia/nemotron-3-ultra-550b-a55b` (550B), separate and larger; never overrides a guardrail |
 | Baseline (8 cases) | overall **0.776**, guardrail fraction **1.000**, completeness 0.513, feasibility 0.606, taste 0.763, pass rate **100 %** |
-| Live run (one idea) | 60–90 s, 3 model calls, verdict `revise`, critic revised 4–5 fields |
+| Live run (one idea) | 60 to 90 s, 3 model calls, verdict `revise`, critic revised 4 to 5 fields |
 | Mutant suite | overall **0.000**, pass rate **0 %**, regressions printed |
+
+### The score moves between runs
+
+The model under test is not deterministic, so the aggregate is a measurement
+with a spread, not a value to quote to three decimals. The same code, the same
+two models and the same eight cases scored **0.776** when the baseline was
+recorded, **0.620** on a re-run and **0.795** on the next one. The guardrails
+held at 1.000 in every run, and the low run was rejected by the baseline
+guard rather than quietly accepted.
+
+So the baseline is a reference point for a like-for-like comparison, and the
+honest claim is the size of the spread, not the third decimal. A regression
+means a drop against the baseline **that the same run reproduces**, not a
+single lower number.
 
 ---
 
 ## Layout
 
 ```
-src/fluxharness/     the harness — workflow.py is the system under test,
+src/fluxharness/     the harness, workflow.py is the system under test,
                       {guardrails,judge,scoring}.py are the rig
 tests/                31 tests, offline, no API key
 cases/                8 one-liner ideas
@@ -183,7 +197,7 @@ AGENTS.md             how to work in this repo, and the rules that must not brea
 
 ## Author
 
-Leonard Sambu — security researcher and full-stack developer, Nairobi, Kenya.
+Leonard Sambu, security researcher and full-stack developer, Nairobi, Kenya.
 
 - Portfolio: <https://llakterian.github.io>
 - GitHub: <https://github.com/llakterian>

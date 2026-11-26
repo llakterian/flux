@@ -1,4 +1,4 @@
-# AGENTS.md — how to work in this repo
+# AGENTS.md: how to work in this repo
 
 This repo answers one question: **can an agent be made dependable?**
 Everything here is either a system under test, or the rig that tests it.
@@ -14,7 +14,7 @@ Two halves. Never mix them.
 | **The driver** | `src/fluxharness/runner.py`, `run.py` | Drive the workflow as a black box, aggregate, compare to baseline |
 
 **Hard rule: `guardrails.py`, `judge.py` and `scoring.py` never import from
-`workflow.py`.** The driver may *call* the workflow — it has to — but the code
+`workflow.py`.** The driver may *call* the workflow. It has to. But the code
 that decides whether output is good must not know how that output was made. The
 moment a scorer needs to know how the workflow is written, it has stopped
 measuring the product and started measuring the implementation. That is how evals
@@ -45,7 +45,7 @@ Never regenerate the baseline to make a red build green. The baseline is the
 memory of what "good" looked like. Rewriting it erases the regression you were
 hired to catch.
 
-## Guardrails vs. the judge
+## Guardrails vs. The judge
 
 - **Guardrails** (`guardrails.py`) are deterministic and free. They catch
   structural failure: unparseable JSON, missing keys, placeholder text, leaked
@@ -63,14 +63,14 @@ beats a judge that scores 0.9 on a confident lie.
 `stack_is_real` used to hard-fail any technology missing from `_KNOWN_TECH`.
 An allowlist of everything that exists cannot be maintained: it flagged real
 tools the list had not heard of (`Preact`, `Flutter`, `GitHub Pages`), and a
-false positive there zeroes a case whose output was fine — the rig scoring its
+false positive there zeroes a case whose output was fine. The rig scoring its
 own ignorance as a product defect.
 
 So it now separates the two cases. A coinage built from hallucination
 morphemes (`QuantumFluxDB`, `HyperCache`, `DataForge`) is invented: hard fail.
 Anything else that is merely unfamiliar is reported as a **warning**. The
 judge's `feasibility` score independently checks that the stack is real, so
-losing the hard fail on rare tools loses no coverage — and the guardrail still
+losing the hard fail on rare tools loses no coverage. And the guardrail still
 catches the failure it was built for, for free.
 
 ## Talking to the model
@@ -94,13 +94,13 @@ pytest -q                                                      # the rig's own t
 ```
 
 `eval` needs a provider key: `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY` or `OPENAI_API_KEY`.
-`pytest` needs nothing — the regression tests run against fixtures and must
+`pytest` needs nothing. The regression tests run against fixtures and must
 never hit the network.
 
 ### The model is a reasoning model
 
 It spends completion tokens thinking before it emits content. Starve the
-budget and you get `finish_reason: "length"` with an empty body — a failure
+budget and you get `finish_reason: "length"` with an empty body. A failure
 that looks like the model ignored you. `max_tokens` is 8000 for that reason, and
 `llm.py` retries a starved completion with double the budget instead of
 repeating the same starved question.
@@ -109,4 +109,4 @@ repeating the same starved question.
 
 Write like the code: state the tradeoff, then stop. If a comment explains *what*
 the next line does, delete it. If it explains *why this and not the obvious
-alternative*, keep it — that is the part that does not survive in git blame.
+alternative*, keep it. That is the part that does not survive in git blame.
