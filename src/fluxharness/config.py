@@ -16,7 +16,7 @@ _PROVIDERS = (
     ("OPENAI_API_KEY", "https://api.openai.com/v1", "OPENAI_MODEL",
      "gpt-4o-mini", "openai"),
     ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "NVIDIA_MODEL",
-     "minimaxai/minimax-m3.1-flash", "nvidia-nim"),
+     "nvidia/nemotron-3.5-lightning-30b-a3b", "nvidia-nim"),
 )
 
 
@@ -33,6 +33,10 @@ def _load_dotenv() -> None:
         key, value = key.strip(), value.strip().strip('"').strip("'")
         if key and key not in os.environ:
             os.environ[key] = value
+
+
+class ConfigError(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -65,14 +69,10 @@ class Config:
                     temperature=temperature,
                 )
         raise ConfigError(
-            "No API key found. Set OPENROUTER_API_KEY, GROQ_API_KEY or OPENAI_API_KEY "
-            "(env, or a .env next to AGENTS.md). See .env.example."
+            "No API key found. Set OPENROUTER_API_KEY, GROQ_API_KEY, OPENAI_API_KEY "
+            "or NVIDIA_API_KEY (env, or a .env next to AGENTS.md). See .env.example."
         )
 
     @property
     def effective_judge_model(self) -> str:
         return self.judge_model or self.model
-
-
-class ConfigError(RuntimeError):
-    pass

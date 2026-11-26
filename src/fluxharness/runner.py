@@ -53,6 +53,7 @@ class EvalReport:
     started: str
     model: str
     provider: str
+    judge_model: str = ""
     results: list[CaseResult] = field(default_factory=list)
     aggregate: dict[str, float] = field(default_factory=dict)
     regressions: list[str] = field(default_factory=list)
@@ -136,6 +137,7 @@ def evaluate(
         started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         model=cfg.model,
         provider=cfg.provider,
+        judge_model=cfg.effective_judge_model,
     )
 
     for index, case in enumerate(cases, start=1):
@@ -185,10 +187,22 @@ def load_baseline(path: Path = BASELINE_PATH) -> dict[str, float] | None:
     return data.get("aggregate", data)
 
 
-def save_baseline(report: EvalReport, path: Path = BASELINE_PATH) -> None:
+def save_baseline(
+    report: EvalReport,
+    path: Path = BASELINE_PATH,
+    previous: dict[str, float] | None = None,
+) -> None:
+    """Write the baseline.
+
+    `previous` is the aggregate the baseline is replacing. It is kept in the
+    file so the history of the instrument is visible: a baseline that moved
+    down is not allowed by default, so when it does move (an explicit
+    override), the old numbers are still on the record.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
+    payload: dict[str, object] = {
         "model": report.model,
+        "judge_model": report.judge_model,
         "provider": report.provider,
         "saved": report.started,
         "mode": report.mode,
@@ -197,7 +211,10 @@ def save_baseline(report: EvalReport, path: Path = BASELINE_PATH) -> None:
             {"case_id": r.case_id, "metrics": r.case_score.metrics if r.case_score else None}
             for r in report.results
         ],
-    }, indent=2) + "\n")
+    }
+    if previous:
+        payload["previous_aggregate"] = previous
+    path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def _write_run(report: EvalReport, llm: LLM, mutant: bool) -> None:
@@ -208,6 +225,7 @@ def _write_run(report: EvalReport, llm: LLM, mutant: bool) -> None:
         "mode": report.mode,
         "started": report.started,
         "model": report.model,
+        "judge_model": report.judge_model,
         "provider": report.provider,
         "aggregate": report.aggregate,
         "regressions": report.regressions,

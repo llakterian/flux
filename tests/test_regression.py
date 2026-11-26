@@ -19,10 +19,16 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fluxharness.contracts import Brief, ContractError, Entity, Endpoint, Review, Spec  # noqa: E402
 from fluxharness.guardrails import run_guardrails                     # noqa: E402
-from fluxharness.runner import make_fixture_result, score_result      # noqa: E402
+from fluxharness.runner import (                                        # noqa: E402
+    EvalReport,
+    make_fixture_result,
+    save_baseline,
+    score_result,
+)
 from fluxharness.scoring import (                                     # noqa: E402
     CaseScore,
     aggregate,
+    baseline_update_allowed,
     compare_to_baseline,
     compute_metrics,
 )
@@ -366,6 +372,67 @@ def test_dataset_is_wellformed():
     for case in lines:
         assert case["idea"].strip(), f"{case['id']} has an empty idea"
         assert len(case["idea"].split()) <= 20, f"{case['id']} idea is not a one-liner"
+
+
+def test_baseline_records_which_judge_produced_it(tmp_path):
+    """The judge is part of the measuring instrument.
+
+    Re-scoring the same code with a different judge is a different
+    measurement, not a regression. So the baseline has to say which judge
+    wrote it -- otherwise two baselines get compared as if they were the
+    same instrument.
+    """
+    report = EvalReport(
+        mode="baseline-run",
+        started="2026-01-01T00:00:00+00:00",
+        model="model-under-test",
+        provider="test-provider",
+        judge_model="judge-model",
+    )
+    report.aggregate = {"overall": 0.8}
+
+    path = tmp_path / "baseline.json"
+    save_baseline(report, path)
+    saved = json.loads(path.read_text())
+
+    assert saved["judge_model"] == "judge-model"
+    assert saved["model"] == "model-under-test"
+    assert saved["provider"] == "test-provider"
+
+
+def test_the_baseline_only_moves_sideways_or_up():
+    """AGENTS.md: never regenerate the baseline to turn a build green.
+
+    The rule is enforced in code, not in a README nobody rereads: the CLI
+    refuses to replace a baseline with lower scores unless the operator
+    explicitly says the instrument changed.
+    """
+    baseline = {"overall": 0.8, "feasibility": 0.6, "completeness": 0.5, "taste": 0.7}
+
+    assert baseline_update_allowed({"overall": 0.8}, baseline), "equal is allowed"
+    assert baseline_update_allowed({"overall": 0.9}, baseline), "better is allowed"
+    assert baseline_update_allowed({"overall": 0.79}, baseline), "inside the threshold is allowed"
+    assert not baseline_update_allowed({"overall": 0.5}, baseline), "a real drop is refused"
+    assert baseline_update_allowed({"overall": 0.5}, None), "no baseline yet is allowed"
+
+
+def test_a_forced_rebaseline_keeps_the_old_numbers(tmp_path):
+    """When the baseline is replaced anyway, the old aggregate stays on the record."""
+    report = EvalReport(
+        mode="baseline-run",
+        started="2026-01-01T00:00:00+00:00",
+        model="model-under-test",
+        provider="test-provider",
+        judge_model="judge-model",
+    )
+    report.aggregate = {"overall": 0.7}
+
+    path = tmp_path / "baseline.json"
+    save_baseline(report, path, previous={"overall": 0.9})
+    saved = json.loads(path.read_text())
+
+    assert saved["aggregate"]["overall"] == 0.7
+    assert saved["previous_aggregate"]["overall"] == 0.9
 
 
 def test_agent_md_exists_and_states_the_hard_rule():

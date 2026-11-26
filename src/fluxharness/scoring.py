@@ -119,3 +119,30 @@ def compare_to_baseline(
     # Sorted worst-first: the headline number is what a reviewer reads first.
     regressions.sort(key=lambda r: -r.drop)
     return regressions
+
+
+def baseline_update_allowed(
+    current: dict[str, float],
+    baseline: dict[str, float] | None,
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+) -> bool:
+    """May this run replace the saved baseline?
+
+    A baseline may only move sideways or up. Regenerating it whenever the
+    scores come out lower turns a regression detector into a mood ring --
+    which is why AGENTS.md says "never regenerate the baseline" and why the
+    rule lives in code, not in a README nobody rereads.
+
+    The one sanctioned way past this is an explicit override, and it exists
+    for the case where the *instrument* changed rather than the artifact:
+    a different judge model, a different prompt. Then the scores are not
+    comparable, and the old number is history rather than a regression.
+    """
+    if not baseline:
+        return True
+    # Only compare the metrics the caller actually produced: a missing key
+    # is not a zero, it is an absence.
+    shared = {metric: value for metric, value in current.items() if metric in baseline}
+    shared_baseline = {metric: baseline[metric] for metric in shared}
+    return not compare_to_baseline(shared, shared_baseline, threshold=threshold)

@@ -1,14 +1,15 @@
 {
   "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "judge_model": "nvidia/nemotron-3-ultra-550b-a55b",
   "provider": "nvidia-nim",
-  "saved": "2026-11-18T07:44:02+00:00",
+  "saved": "2026-11-25T18:49:38+00:00",
   "mode": "baseline-run",
   "aggregate": {
-    "overall": 0.7875,
+    "overall": 0.7762,
     "guardrail_fraction": 1.0,
-    "completeness": 0.575,
-    "feasibility": 0.6125,
-    "taste": 0.75,
+    "completeness": 0.5125,
+    "feasibility": 0.6062,
+    "taste": 0.7625,
     "cases": 8.0,
     "pass_rate": 1.0
   },
@@ -16,76 +17,76 @@
     {
       "case_id": "watering",
       "metrics": {
-        "overall": 0.84,
+        "overall": 0.98,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.8,
-        "feasibility": 0.7,
-        "taste": 0.7
+        "completeness": 0.9,
+        "feasibility": 1.0,
+        "taste": 1.0
       }
     },
     {
       "case_id": "invoice",
       "metrics": {
-        "overall": 0.84,
+        "overall": 0.66,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.6,
-        "feasibility": 0.8,
-        "taste": 0.8
+        "completeness": 0.4,
+        "feasibility": 0.4,
+        "taste": 0.5
       }
     },
     {
       "case_id": "study",
       "metrics": {
-        "overall": 0.66,
+        "overall": 0.68,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.2,
+        "completeness": 0.4,
         "feasibility": 0.4,
-        "taste": 0.7
+        "taste": 0.6
       }
     },
     {
       "case_id": "market",
       "metrics": {
-        "overall": 0.82,
+        "overall": 0.84,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.4,
-        "feasibility": 0.8,
+        "completeness": 0.6,
+        "feasibility": 0.7,
         "taste": 0.9
       }
     },
     {
       "case_id": "menu",
       "metrics": {
-        "overall": 0.84,
+        "overall": 0.64,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.8,
-        "feasibility": 0.6,
-        "taste": 0.8
+        "completeness": 0.4,
+        "feasibility": 0.2,
+        "taste": 0.6
       }
     },
     {
       "case_id": "shifts",
       "metrics": {
-        "overall": 0.72,
+        "overall": 0.78,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.6,
-        "feasibility": 0.5,
-        "taste": 0.5
+        "completeness": 0.5,
+        "feasibility": 0.6,
+        "taste": 0.8
       }
     },
     {
       "case_id": "pledge",
       "metrics": {
-        "overall": 0.88,
+        "overall": 0.84,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.7,
+        "completeness": 0.5,
         "feasibility": 0.8,
         "taste": 0.9
       }
@@ -93,13 +94,22 @@
     {
       "case_id": "scrapbook",
       "metrics": {
-        "overall": 0.7,
+        "overall": 0.79,
         "guardrail_fraction": 1.0,
         "guardrail_hard_fail": 0.0,
-        "completeness": 0.5,
-        "feasibility": 0.3,
-        "taste": 0.7
+        "completeness": 0.4,
+        "feasibility": 0.75,
+        "taste": 0.8
       }
     }
-  ]
+  ],
+  "previous_aggregate": {
+    "overall": 0.7875,
+    "guardrail_fraction": 1.0,
+    "completeness": 0.575,
+    "feasibility": 0.6125,
+    "taste": 0.75,
+    "cases": 8.0,
+    "pass_rate": 1.0
+  }
 }

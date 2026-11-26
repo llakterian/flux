@@ -27,6 +27,7 @@ from fluxharness.runner import (                            # noqa: E402
 )
 from fluxharness.workflow import Workflow, WorkflowError    # noqa: E402
 from fluxharness.llm import LLM                             # noqa: E402
+from fluxharness.scoring import baseline_update_allowed     # noqa: E402
 
 
 class C:
@@ -179,16 +180,30 @@ def cmd_eval(args: argparse.Namespace) -> int:
     baseline = load_baseline()
     if baseline and not args.mutant:
         print(c.dim(f"  {c.dim('baseline')}  overall {baseline.get('overall', 0):.3f}"))
-    if report.regressions:
+
+    if args.save_baseline:
+        # A baseline may only move sideways or up. The exception is an
+        # explicit --force, for the case where the measuring instrument
+        # changed (a different judge model, a different prompt) and the old
+        # numbers are history rather than a regression.
+        if baseline and not args.force and not baseline_update_allowed(report.aggregate, baseline):
+            print(c.red("\n  refusing to replace the baseline: this run scores lower than the saved one."))
+            print(c.dim("  A baseline only moves sideways or up. If the instrument changed -- a different"))
+            print(c.dim("  judge model, a different prompt -- re-run with --force and say why in the commit."))
+            for line in report.regressions:
+                print(c.red(f"    ✗ {line}"))
+            return 1
+        save_baseline(report, previous=baseline if args.force else None)
+        print(c.green(f"\n  ✓ baseline saved → {BASELINE_PATH}"))
+        if args.force and baseline:
+            print(c.dim(f"  (forced — the previous aggregate was overall {baseline.get('overall', 0):.3f}; "
+                        f"it is kept in the file under previous_aggregate)"))
+    elif report.regressions:
         print(c.red("\n  REGRESSIONS vs baseline:"))
         for line in report.regressions:
             print(c.red(f"    ✗ {line}"))
         print(c.dim(f"\n  baseline: {BASELINE_PATH}"))
         return 1
-
-    if args.save_baseline:
-        save_baseline(report)
-        print(c.green(f"\n  ✓ baseline saved → {BASELINE_PATH}"))
     elif not baseline:
         print(c.dim("\n  no baseline yet — run with --save-baseline to set one"))
 
@@ -213,6 +228,9 @@ def main() -> int:
                         help="guardrails only (free, offline after the workflow run)")
     p_eval.add_argument("--save-baseline", action="store_true",
                         help="write the current aggregate as the new baseline")
+    p_eval.add_argument("--force", action="store_true",
+                        help="allow --save-baseline to replace a baseline with lower scores; "
+                             "use only when the instrument changed (a different judge model)")
     p_eval.add_argument("--limit", type=int, default=0, metavar="N",
                         help="score only the first N cases (smoke run)")
     p_eval.set_defaults(func=cmd_eval)
